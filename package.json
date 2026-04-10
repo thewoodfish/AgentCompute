@@ -11,7 +11,7 @@
     "keygen": "ts-node -e \"const { Keypair } = require('@stellar/stellar-sdk'); const kp = Keypair.random(); console.log('Public key:', kp.publicKey()); console.log('Secret key:', kp.secret());\""
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0",
+    "groq-sdk": "^0.9.0",
     "@stellar/stellar-sdk": "^13.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

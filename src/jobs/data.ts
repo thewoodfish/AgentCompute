@@ -1,8 +1,8 @@
 import Papa from 'papaparse';
-import Anthropic from '@anthropic-ai/sdk';
+import Groq from 'groq-sdk';
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const MODEL = 'claude-haiku-4-5';
+const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const MODEL = 'llama-3.3-70b-versatile';
 
 interface DataInput {
   csv: string;
@@ -32,7 +32,7 @@ export async function csvInsights(input: DataInput): Promise<DataResult> {
   const sampleRows = rows.slice(0, 10);
   const dataSummary = JSON.stringify({ columns, row_count, sample: sampleRows }, null, 2);
 
-  const response = await client.messages.create({
+  const response = await client.chat.completions.create({
     model: MODEL,
     max_tokens: 1024,
     messages: [
@@ -50,12 +50,9 @@ Question: ${question}`,
     ],
   });
 
-  const content = response.content[0];
-  if (content.type !== 'text') throw new Error('Unexpected LLM response type');
-
-  const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+  const raw = response.choices[0].message.content ?? '';
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('No JSON in LLM response');
-
   const llmResult = JSON.parse(jsonMatch[0]) as { answer: string; insights: string[] };
 
   return {
