@@ -1,0 +1,31 @@
+{
+  "name": "agentcompute",
+  "version": "1.0.0",
+  "description": "Pay-per-job HTTP compute server for AI agents using x402 + Stellar MPP",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "ts-node src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "agent": "ts-node client/agent.ts",
+    "keygen": "ts-node -e \"const { Keypair } = require('@stellar/stellar-sdk'); const kp = Keypair.random(); console.log('Public key:', kp.publicKey()); console.log('Secret key:', kp.secret());\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@stellar/stellar-sdk": "^13.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "papaparse": "^5.4.1",
+    "pdf-parse": "^1.1.1",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "@types/papaparse": "^5.3.14",
+    "@types/pdf-parse": "^1.1.4",
+    "@types/uuid": "^10.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  }
+}
