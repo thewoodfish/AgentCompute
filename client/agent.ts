@@ -228,8 +228,8 @@ async function main() {
   console.log('╚══════════════════════════════════════╝');
 
   // Step 1: Discover
-  console.log(`\n[Agent] Discovering jobs at ${SERVER_URL}...`);
-  const discovery = await fetchJSON<ServerDiscovery>(SERVER_URL);
+  console.log(`\n[Agent] Discovering jobs at ${SERVER_URL}/api...`);
+  const discovery = await fetchJSON<ServerDiscovery>(`${SERVER_URL}/api`);
   console.log(`[Agent] Found ${discovery.jobs.length} jobs:`);
   for (const j of discovery.jobs) {
     console.log(`  • ${j.name.padEnd(14)} $${j.price} USDC — ${j.description}`);

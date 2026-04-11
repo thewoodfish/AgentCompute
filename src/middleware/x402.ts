@@ -26,7 +26,7 @@ export async function x402Middleware(req: Request, res: Response, next: NextFunc
 
   if (!paymentHeader) {
     // No payment — issue 402
-    const jobId = uuidv4();
+    const jobId = uuidv4().replace(/-/g, '').slice(0, 16);
     req.jobId = jobId;
 
     emit({ type: 'job_request', job: jobName, jobId, price: jobDef.price });
