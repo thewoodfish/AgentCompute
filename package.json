@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "agent": "ts-node client/agent.ts",
-    "keygen": "ts-node -e \"const { Keypair } = require('@stellar/stellar-sdk'); const kp = Keypair.random(); console.log('Public key:', kp.publicKey()); console.log('Secret key:', kp.secret());\""
+    "keygen": "ts-node -e \"const { Keypair } = require('@stellar/stellar-sdk'); const kp = Keypair.random(); console.log('Public key:', kp.publicKey()); console.log('Secret key:', kp.secret());\"",
+    "setup-usdc": "ts-node scripts/setup-usdc-distributor.ts"
   },
   "dependencies": {
     "groq-sdk": "^0.9.0",
