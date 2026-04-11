@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentCompute — Pay-per-job Compute for AI Agents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg0: #020209;
+  --bg1: #08081a;
+  --bg2: #0d0d24;
+  --card: rgba(255,255,255,0.03);
+  --border: rgba(255,255,255,0.07);
+  --border-bright: rgba(0,212,255,0.3);
+  --cyan: #00d4ff;
+  --purple: #8b5cf6;
+  --gold: #f59e0b;
+  --green: #10b981;
+  --red: #ef4444;
+  --text: #f1f5f9;
+  --muted: #64748b;
+  --font: 'Space Grotesk', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font);
+  background: var(--bg0);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+#canvas-bg {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 0; opacity: 0.4;
+}
+.content { position: relative; z-index: 1; }
+
+/* ── Header ── */
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1.25rem 2.5rem;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  background: rgba(2,2,9,0.8);
+  position: sticky; top: 0; z-index: 100;
+}
+.logo {
+  display: flex; align-items: center; gap: 0.6rem;
+  font-size: 1.15rem; font-weight: 700;
+  color: var(--cyan);
+  text-shadow: 0 0 20px rgba(0,212,255,0.5);
+}
+.logo-hex { font-size: 1.4rem; }
+.header-right { display: flex; align-items: center; gap: 1rem; }
+.badge {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.75rem; font-weight: 600;
+  border: 1px solid;
+}
+.badge-live {
+  background: rgba(16,185,129,0.1);
+  border-color: rgba(16,185,129,0.3);
+  color: var(--green);
+}
+.badge-live .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+.badge-net {
+  background: rgba(139,92,246,0.1);
+  border-color: rgba(139,92,246,0.3);
+  color: var(--purple);
+}
+@keyframes pulse-dot {
+  0%,100% { opacity: 1; box-shadow: 0 0 4px var(--green); }
+  50% { opacity: 0.4; box-shadow: none; }
+}
+
+/* ── Hero ── */
+.hero {
+  text-align: center;
+  padding: 5rem 2rem 3rem;
+}
+.hero h1 {
+  font-size: clamp(2.2rem, 5vw, 3.8rem);
+  font-weight: 700;
+  line-height: 1.15;
+  margin-bottom: 1.2rem;
+  background: linear-gradient(135deg, var(--cyan) 0%, #fff 40%, var(--purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.hero p {
+  font-size: 1.1rem; color: var(--muted); max-width: 560px; margin: 0 auto 2.5rem;
+  line-height: 1.6;
+}
+.stats-row {
+  display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap;
+  margin-bottom: 2.5rem;
+}
+.stat-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.2rem 2rem;
+  min-width: 140px;
+  backdrop-filter: blur(8px);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.stat-card:hover {
+  border-color: var(--border-bright);
+  box-shadow: 0 0 20px rgba(0,212,255,0.08);
+}
+.stat-value {
+  display: block;
+  font-size: 1.9rem; font-weight: 700;
+  color: var(--cyan);
+  font-family: var(--mono);
+  text-shadow: 0 0 16px rgba(0,212,255,0.4);
+}
+.stat-label {
+  font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+}
+.cta-btn {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.8rem 2rem;
+  background: linear-gradient(135deg, var(--cyan), var(--purple));
+  color: #000;
+  font-family: var(--font);
+  font-size: 0.95rem; font-weight: 700;
+  border: none; border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 0 30px rgba(0,212,255,0.3);
+}
+.cta-btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 40px rgba(0,212,255,0.5); }
+
+/* ── Section titles ── */
+section { padding: 3rem 2rem; max-width: 1100px; margin: 0 auto; }
+.section-title {
+  font-size: 1.5rem; font-weight: 700;
+  margin-bottom: 2rem;
+  display: flex; align-items: center; gap: 0.75rem;
+}
+.section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(to right, var(--border), transparent);
+}
+
+/* ── Flow Diagram ── */
+.flow-wrap {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 2.5rem 1.5rem;
+  backdrop-filter: blur(8px);
+  overflow-x: auto;
+}
+.flow-nodes {
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; min-width: 640px;
+}
+.flow-node {
+  display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+  flex-shrink: 0;
+}
+.node-circle {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.5rem;
+  border: 2px solid var(--border);
+  background: var(--bg2);
+  transition: all 0.4s ease;
+  position: relative;
+}
+.node-label {
+  font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted);
+  text-align: center; max-width: 70px;
+  transition: color 0.4s;
+}
+.node-sub {
+  font-size: 0.62rem; color: var(--muted); opacity: 0.6;
+  text-align: center; max-width: 70px; font-family: var(--mono);
+}
+.flow-arrow {
+  width: 48px; height: 2px;
+  background: var(--border);
+  flex-shrink: 0;
+  position: relative;
+  transition: background 0.4s;
+}
+.flow-arrow::after {
+  content: '▶';
+  position: absolute; right: -8px; top: -7px;
+  font-size: 0.7rem; color: var(--muted);
+  transition: color 0.4s;
+}
+
+/* node active states */
+.flow-node.active-request .node-circle {
+  border-color: var(--gold); box-shadow: 0 0 20px rgba(245,158,11,0.4);
+  background: rgba(245,158,11,0.1);
+}
+.flow-node.active-request .node-label { color: var(--gold); }
+.flow-node.active-payment .node-circle {
+  border-color: var(--cyan); box-shadow: 0 0 20px rgba(0,212,255,0.4);
+  background: rgba(0,212,255,0.08);
+}
+.flow-node.active-payment .node-label { color: var(--cyan); }
+.flow-node.active-verify .node-circle {
+  border-color: var(--purple); box-shadow: 0 0 20px rgba(139,92,246,0.4);
+  background: rgba(139,92,246,0.08);
+}
+.flow-node.active-verify .node-label { color: var(--purple); }
+.flow-node.active-run .node-circle {
+  border-color: var(--green); box-shadow: 0 0 20px rgba(16,185,129,0.4);
+  background: rgba(16,185,129,0.08);
+  animation: spin-once 0.8s ease;
+}
+.flow-node.active-run .node-label { color: var(--green); }
+.flow-node.active-done .node-circle {
+  border-color: var(--green); box-shadow: 0 0 30px rgba(16,185,129,0.6);
+  background: rgba(16,185,129,0.15);
+}
+.flow-node.active-done .node-label { color: var(--green); }
+.flow-arrow.active { background: var(--cyan); }
+.flow-arrow.active::after { color: var(--cyan); }
+@keyframes spin-once {
+  from { transform: rotate(0deg); } to { transform: rotate(360deg); }
+}
+@keyframes node-pulse {
+  0%,100% { box-shadow: 0 0 20px rgba(0,212,255,0.4); }
+  50% { box-shadow: 0 0 40px rgba(0,212,255,0.8); }
+}
+
+/* ── Job Cards ── */
+.jobs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.25rem;
+}
+.job-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.5rem;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+  display: flex; flex-direction: column; gap: 0.75rem;
+}
+.job-card:hover {
+  border-color: rgba(0,212,255,0.35);
+  box-shadow: 0 0 28px rgba(0,212,255,0.08);
+  transform: translateY(-2px);
+}
+.job-card-top { display: flex; align-items: flex-start; justify-content: space-between; }
+.job-name { font-size: 1rem; font-weight: 700; font-family: var(--mono); color: var(--cyan); }
+.job-price {
+  background: rgba(245,158,11,0.12);
+  border: 1px solid rgba(245,158,11,0.3);
+  color: var(--gold);
+  font-size: 0.75rem; font-weight: 700;
+  padding: 0.2rem 0.55rem; border-radius: 6px;
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+.job-desc { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+.job-meta { display: flex; align-items: center; justify-content: space-between; margin-top: auto; }
+.job-duration {
+  font-size: 0.72rem; color: var(--muted); font-family: var(--mono);
+  display: flex; align-items: center; gap: 0.3rem;
+}
+.job-mpp {
+  font-size: 0.65rem; font-weight: 700;
+  background: rgba(139,92,246,0.15);
+  border: 1px solid rgba(139,92,246,0.3);
+  color: var(--purple);
+  padding: 0.15rem 0.45rem; border-radius: 4px;
+}
+.try-btn {
+  font-family: var(--font);
+  font-size: 0.8rem; font-weight: 600;
+  background: transparent;
+  border: 1px solid rgba(0,212,255,0.35);
+  color: var(--cyan);
+  padding: 0.35rem 0.9rem; border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.try-btn:hover {
+  background: rgba(0,212,255,0.1);
+  box-shadow: 0 0 12px rgba(0,212,255,0.2);
+}
+
+/* ── Activity Feed ── */
+.terminal {
+  background: rgba(0,0,0,0.5);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1.25rem;
+  height: 320px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  backdrop-filter: blur(8px);
+}
+.terminal::-webkit-scrollbar { width: 4px; }
+.terminal::-webkit-scrollbar-track { background: transparent; }
+.terminal::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.log-entry { display: flex; gap: 1rem; align-items: baseline; animation: fade-in 0.3s ease; }
+.log-time { color: var(--muted); flex-shrink: 0; }
+.log-tag {
+  flex-shrink: 0; width: 52px; text-align: center;
+  padding: 0.05rem 0; border-radius: 3px; font-size: 0.7rem; font-weight: 700;
+}
+.tag-request { background: rgba(245,158,11,0.15); color: var(--gold); }
+.tag-payment { background: rgba(0,212,255,0.15); color: var(--cyan); }
+.tag-run     { background: rgba(139,92,246,0.15); color: var(--purple); }
+.tag-done    { background: rgba(16,185,129,0.15); color: var(--green); }
+.tag-error   { background: rgba(239,68,68,0.15); color: var(--red); }
+.log-msg { color: #cbd5e1; }
+.log-msg .hi { color: var(--text); font-weight: 500; }
+.terminal-empty { color: var(--muted); text-align: center; padding: 3rem 0; font-size: 0.85rem; }
+@keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ── Modal ── */
+.modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(2,2,9,0.85);
+  z-index: 200;
+  backdrop-filter: blur(6px);
+  align-items: center; justify-content: center;
+  padding: 1rem;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--bg1);
+  border: 1px solid var(--border-bright);
+  border-radius: 18px;
+  width: 100%; max-width: 620px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 0 60px rgba(0,212,255,0.15);
+  animation: modal-in 0.25s ease;
+}
+@keyframes modal-in { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: none; } }
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1.5rem 1.75rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.modal-title { font-size: 1.1rem; font-weight: 700; }
+.modal-close {
+  background: none; border: none; color: var(--muted);
+  font-size: 1.4rem; cursor: pointer; line-height: 1;
+  transition: color 0.2s;
+}
+.modal-close:hover { color: var(--text); }
+.modal-body { padding: 1.5rem 1.75rem; display: flex; flex-direction: column; gap: 1.25rem; }
+.field-label {
+  font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--muted); margin-bottom: 0.4rem;
+}
+.payload-editor {
+  width: 100%; height: 150px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: var(--mono); font-size: 0.82rem;
+  padding: 0.85rem;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.payload-editor:focus { border-color: var(--border-bright); }
+.exec-btn {
+  width: 100%;
+  padding: 0.85rem;
+  background: linear-gradient(135deg, var(--cyan), var(--purple));
+  color: #000; font-family: var(--font);
+  font-size: 0.95rem; font-weight: 700;
+  border: none; border-radius: 9px; cursor: pointer;
+  transition: opacity 0.2s, box-shadow 0.2s;
+  box-shadow: 0 0 20px rgba(0,212,255,0.2);
+}
+.exec-btn:hover { opacity: 0.9; box-shadow: 0 0 32px rgba(0,212,255,0.4); }
+.exec-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Steps ── */
+.steps { display: flex; flex-direction: column; gap: 0.6rem; }
+.step {
+  display: flex; align-items: center; gap: 0.75rem;
+  font-size: 0.83rem; color: var(--muted);
+  transition: color 0.3s;
+}
+.step-icon {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.65rem; flex-shrink: 0;
+  transition: all 0.3s;
+}
+.step.waiting .step-icon { border-color: var(--border); }
+.step.running .step-icon { border-color: var(--cyan); color: var(--cyan); animation: spin 1s linear infinite; }
+.step.done .step-icon { background: var(--green); border-color: var(--green); color: #000; }
+.step.done { color: var(--text); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Result ── */
+.result-box {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  font-family: var(--mono); font-size: 0.78rem;
+  max-height: 220px; overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  display: none;
+}
+.result-box.visible { display: block; animation: fade-in 0.3s ease; }
+.result-box .k { color: var(--purple); }
+.result-box .s { color: var(--green); }
+.result-box .n { color: var(--gold); }
+
+/* ── Responsive ── */
+@media (max-width: 640px) {
+  header { padding: 1rem 1.25rem; }
+  .hero { padding: 3rem 1rem 2rem; }
+  section { padding: 2rem 1rem; }
+  .stats-row { gap: 1rem; }
+  .stat-card { padding: 1rem 1.25rem; }
+}
+</style>
+</head>
+<body>
+<canvas id="canvas-bg"></canvas>
+<div class="content">
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <span class="logo-hex">⬡</span>
+    AgentCompute
+  </div>
+  <div class="header-right">
+    <span class="badge badge-live"><span class="dot"></span>LIVE</span>
+    <span class="badge badge-net">★ stellar-testnet</span>
+  </div>
+</header>
+
+<!-- Hero -->
+<div class="hero">
+  <h1>Pay-per-job Compute<br>for AI Agents</h1>
+  <p>No API keys. No accounts. No humans.<br>Submit a job, pay in USDC over x402, get results.</p>
+  <div class="stats-row">
+    <div class="stat-card">
+      <span class="stat-value" id="stat-jobs">0</span>
+      <span class="stat-label">Jobs Run</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="stat-usdc">$0.00</span>
+      <span class="stat-label">USDC Earned</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-value" id="stat-avg">—</span>
+      <span class="stat-label">Avg Response</span>
+    </div>
+  </div>
+  <button class="cta-btn" onclick="document.querySelector('.jobs-section').scrollIntoView({behavior:'smooth'})">
+    Try a Job →
+  </button>
+</div>
+
+<!-- Flow Diagram -->
+<section>
+  <h2 class="section-title">⚡ Payment Flow</h2>
+  <div class="flow-wrap">
+    <div class="flow-nodes">
+      <div class="flow-node" id="node-agent">
+        <div class="node-circle">🤖</div>
+        <div class="node-label">AI Agent</div>
+        <div class="node-sub">client</div>
+      </div>
+      <div class="flow-arrow" id="arrow-1"></div>
+      <div class="flow-node" id="node-402">
+        <div class="node-circle">⚡</div>
+        <div class="node-label">402 Gate</div>
+        <div class="node-sub">x402</div>
+      </div>
+      <div class="flow-arrow" id="arrow-2"></div>
+      <div class="flow-node" id="node-stellar">
+        <div class="node-circle">✦</div>
+        <div class="node-label">Stellar Pay</div>
+        <div class="node-sub">USDC</div>
+      </div>
+      <div class="flow-arrow" id="arrow-3"></div>
+      <div class="flow-node" id="node-verify">
+        <div class="node-circle">🔍</div>
+        <div class="node-label">Horizon</div>
+        <div class="node-sub">verify</div>
+      </div>
+      <div class="flow-arrow" id="arrow-4"></div>
+      <div class="flow-node" id="node-run">
+        <div class="node-circle">⚙</div>
+        <div class="node-label">Job Runner</div>
+        <div class="node-sub">execute</div>
+      </div>
+      <div class="flow-arrow" id="arrow-5"></div>
+      <div class="flow-node" id="node-result">
+        <div class="node-circle">✅</div>
+        <div class="node-label">Result</div>
+        <div class="node-sub">JSON</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Job Catalog -->
+<section class="jobs-section">
+  <h2 class="section-title">⚙ Job Catalog</h2>
+  <div class="jobs-grid" id="jobs-grid">
+    <!-- populated by JS -->
+  </div>
+</section>
+
+<!-- Activity Feed -->
+<section>
+  <h2 class="section-title">📡 Live Activity</h2>
+  <div class="terminal" id="feed">
+    <div class="terminal-empty">Waiting for activity — run a job to see the feed light up.</div>
+  </div>
+</section>
+
+</div><!-- /content -->
+
+<!-- Try It Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Run Job</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <div class="field-label">Payload (JSON)</div>
+        <textarea class="payload-editor" id="payload-editor" spellcheck="false"></textarea>
+      </div>
+      <button class="exec-btn" id="exec-btn" onclick="executeJob()">Execute Job</button>
+      <div class="steps" id="steps-wrap" style="display:none">
+        <div class="step waiting" id="step-1"><div class="step-icon">1</div><span>Sending request...</span></div>
+        <div class="step waiting" id="step-2"><div class="step-icon">2</div><span>402 received — awaiting payment</span></div>
+        <div class="step waiting" id="step-3"><div class="step-icon">3</div><span>Submitting Stellar USDC payment</span></div>
+        <div class="step waiting" id="step-4"><div class="step-icon">4</div><span>Verifying on Horizon</span></div>
+        <div class="step waiting" id="step-5"><div class="step-icon">5</div><span>Executing job</span></div>
+        <div class="step waiting" id="step-6"><div class="step-icon">6</div><span>Result ready</span></div>
+      </div>
+      <div>
+        <div class="field-label" id="result-label" style="display:none">Result</div>
+        <pre class="result-box" id="result-box"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Canvas particles ──────────────────────────────────────────────────────────
+(function() {
+  const canvas = document.getElementById('canvas-bg');
+  const ctx = canvas.getContext('2d');
+  let W, H, dots = [];
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  function init() {
+    dots = [];
+    for (let i = 0; i < 80; i++) {
+      dots.push({
+        x: Math.random() * W, y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.3, vy: (Math.random() - 0.5) * 0.3,
+        r: Math.random() * 1.5 + 0.5,
+      });
+    }
+  }
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    // connect nearby dots
+    for (let i = 0; i < dots.length; i++) {
+      for (let j = i + 1; j < dots.length; j++) {
+        const dx = dots[i].x - dots[j].x, dy = dots[i].y - dots[j].y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 120) {
+          ctx.strokeStyle = `rgba(0,212,255,${0.12 * (1 - dist/120)})`;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(dots[i].x, dots[i].y);
+          ctx.lineTo(dots[j].x, dots[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+    dots.forEach(d => {
+      ctx.fillStyle = 'rgba(0,212,255,0.6)';
+      ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI*2); ctx.fill();
+      d.x += d.vx; d.y += d.vy;
+      if (d.x < 0 || d.x > W) d.vx *= -1;
+      if (d.y < 0 || d.y > H) d.vy *= -1;
+    });
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize', () => { resize(); init(); });
+  resize(); init(); draw();
+})();
+
+// ── Job data ──────────────────────────────────────────────────────────────────
+const JOBS = [
+  { name: 'summarize', price: '0.05', desc: 'LLM-powered text summarization', duration: 3000,
+    example: { text: "Artificial intelligence is transforming how we work and live. From autonomous vehicles to medical diagnosis, AI systems are increasingly taking on tasks that once required human intelligence. The technology raises profound questions about the future of work and the nature of intelligence itself." }
+  },
+  { name: 'classify', price: '0.03', desc: 'LLM-powered text classification', duration: 2000,
+    example: { text: "I absolutely love this product! Exceeded all expectations.", labels: ["positive","negative","neutral"] }
+  },
+  { name: 'analyze', price: '0.08', desc: 'LLM analysis + question answering', duration: 4000,
+    example: { text: "The company reported a 42% increase in revenue, driven by strong growth in cloud services and enterprise subscriptions. Operating costs rose 18% due to infrastructure investments.", question: "What were the key drivers of revenue growth?" }
+  },
+  { name: 'run-code', price: '0.10', desc: 'Sandboxed JavaScript or Python execution', duration: 8000, mpp: true,
+    example: { language: "javascript", code: "const fib = n => n <= 1 ? n : fib(n-1) + fib(n-2);\nconst seq = Array.from({length:10},(_,i)=>fib(i));\nconsole.log('Fibonacci:', seq.join(', '));" }
+  },
+  { name: 'csv-insights', price: '0.07', desc: 'CSV data analysis with LLM insights', duration: 6000, mpp: true,
+    example: { csv: "name,age,salary\nAlice,32,85000\nBob,28,72000\nCarol,41,110000\nDave,35,95000", question: "Who has the highest salary and what is the average salary?" }
+  },
+  { name: 'pdf-to-text', price: '0.04', desc: 'PDF → plain text extraction', duration: 3000,
+    example: { file_base64: "<base64-encoded-pdf>", type: "pdf" }
+  },
+];
+
+// ── Render job cards ──────────────────────────────────────────────────────────
+const grid = document.getElementById('jobs-grid');
+JOBS.forEach(job => {
+  const card = document.createElement('div');
+  card.className = 'job-card';
+  card.innerHTML = `
+    <div class="job-card-top">
+      <span class="job-name">${job.name}</span>
+      <span class="job-price">$${job.price} USDC</span>
+    </div>
+    <div class="job-desc">${job.desc}</div>
+    <div class="job-meta">
+      <span class="job-duration">⏱ ~${(job.duration/1000).toFixed(0)}s${job.mpp ? ' ' : ''}</span>
+      ${job.mpp ? '<span class="job-mpp">MPP streaming</span>' : ''}
+      <button class="try-btn" onclick="openModal('${job.name}')">Try it →</button>
+    </div>
+  `;
+  grid.appendChild(card);
+});
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+let jobsRun = 0, usdcEarned = 0, totalDuration = 0;
+
+function animateNumber(el, from, to, formatter, duration = 600) {
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const val = from + (to - from) * (1 - Math.pow(1 - t, 3));
+    el.textContent = formatter(val);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function refreshStats() {
+  fetch('/stats').then(r => r.json()).then(s => {
+    const j = parseInt(s.jobs_run) || 0;
+    const u = parseFloat(s.usdc_earned) || 0;
+    const a = parseInt(s.avg_duration_ms) || 0;
+    animateNumber(document.getElementById('stat-jobs'), jobsRun, j, v => Math.round(v));
+    animateNumber(document.getElementById('stat-usdc'), usdcEarned, u, v => '$' + v.toFixed(2));
+    if (a > 0) document.getElementById('stat-avg').textContent = a + 'ms';
+    jobsRun = j; usdcEarned = u;
+  }).catch(() => {});
+}
+refreshStats();
+
+// ── SSE Activity Feed ─────────────────────────────────────────────────────────
+const feed = document.getElementById('feed');
+let feedHasContent = false;
+
+function addLog(tag, tagClass, msg) {
+  if (!feedHasContent) { feed.innerHTML = ''; feedHasContent = true; }
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+  entry.innerHTML = `<span class="log-time">${time}</span><span class="log-tag ${tagClass}">${tag}</span><span class="log-msg">${msg}</span>`;
+  feed.appendChild(entry);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+const evtSource = new EventSource('/events');
+evtSource.onmessage = (e) => {
+  const ev = JSON.parse(e.data);
+  switch (ev.type) {
+    case 'job_request':
+      addLog('402', 'tag-request', `<span class="hi">${ev.job}</span> → payment required <span class="hi">$${ev.price} USDC</span>`);
+      activateFlow('request');
+      break;
+    case 'payment_verified':
+      addLog('PAY', 'tag-payment', `tx <span class="hi">${(ev.txHash||'').slice(0,14)}…</span> verified ✓ <span class="hi">${ev.amount} USDC</span>`);
+      activateFlow('payment');
+      break;
+    case 'job_start':
+      addLog('RUN', 'tag-run', `<span class="hi">${ev.job}</span> executing…`);
+      activateFlow('run');
+      break;
+    case 'job_complete':
+      addLog('DONE', 'tag-done', `<span class="hi">${ev.job}</span> completed in <span class="hi">${ev.duration_ms}ms</span> ✅`);
+      activateFlow('done');
+      refreshStats();
+      break;
+    case 'job_error':
+      addLog('ERR', 'tag-error', `<span class="hi">${ev.job}</span> — ${ev.error}`);
+      break;
+  }
+};
+
+// ── Flow diagram animation ────────────────────────────────────────────────────
+let flowTimeout;
+function activateFlow(stage) {
+  clearTimeout(flowTimeout);
+  const nodes = ['node-agent','node-402','node-stellar','node-verify','node-run','node-result'];
+  const arrows = ['arrow-1','arrow-2','arrow-3','arrow-4','arrow-5'];
+  nodes.forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('active-request','active-payment','active-verify','active-run','active-done');
+  });
+  arrows.forEach(id => document.getElementById(id).classList.remove('active'));
+
+  if (stage === 'request') {
+    document.getElementById('node-agent').classList.add('active-request');
+    document.getElementById('node-402').classList.add('active-request');
+    document.getElementById('arrow-1').classList.add('active');
+  } else if (stage === 'payment') {
+    document.getElementById('node-402').classList.add('active-payment');
+    document.getElementById('node-stellar').classList.add('active-payment');
+    document.getElementById('node-verify').classList.add('active-verify');
+    document.getElementById('arrow-2').classList.add('active');
+    document.getElementById('arrow-3').classList.add('active');
+  } else if (stage === 'run') {
+    document.getElementById('node-verify').classList.add('active-verify');
+    document.getElementById('node-run').classList.add('active-run');
+    document.getElementById('arrow-4').classList.add('active');
+  } else if (stage === 'done') {
+    document.getElementById('node-run').classList.add('active-done');
+    document.getElementById('node-result').classList.add('active-done');
+    document.getElementById('arrow-5').classList.add('active');
+    flowTimeout = setTimeout(() => {
+      nodes.forEach(id => {
+        document.getElementById(id).classList.remove('active-request','active-payment','active-verify','active-run','active-done');
+      });
+      arrows.forEach(id => document.getElementById(id).classList.remove('active'));
+    }, 4000);
+  }
+}
+
+// ── Modal ─────────────────────────────────────────────────────────────────────
+let currentJob = null;
+function openModal(jobName) {
+  currentJob = JOBS.find(j => j.name === jobName);
+  if (!currentJob) return;
+  document.getElementById('modal-title').textContent = `⚙ ${currentJob.name}  ·  $${currentJob.price} USDC`;
+  document.getElementById('payload-editor').value = JSON.stringify(currentJob.example, null, 2);
+  document.getElementById('steps-wrap').style.display = 'none';
+  document.getElementById('result-box').className = 'result-box';
+  document.getElementById('result-label').style.display = 'none';
+  document.getElementById('exec-btn').disabled = false;
+  document.getElementById('exec-btn').textContent = 'Execute Job';
+  ['step-1','step-2','step-3','step-4','step-5','step-6'].forEach(s => {
+    const el = document.getElementById(s);
+    el.className = 'step waiting';
+    el.querySelector('.step-icon').textContent = s.split('-')[1];
+  });
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+function setStep(n, state) {
+  const el = document.getElementById('step-' + n);
+  el.className = 'step ' + state;
+  const icon = el.querySelector('.step-icon');
+  if (state === 'running') icon.textContent = '↻';
+  else if (state === 'done') icon.textContent = '✓';
+  else icon.textContent = n;
+}
+
+async function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function syntaxHighlight(json) {
+  return json
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, (match) => {
+      if (/^"/.test(match)) {
+        if (/:$/.test(match)) return `<span class="k">${match}</span>`;
+        return `<span class="s">${match}</span>`;
+      }
+      if (/true|false|null/.test(match)) return `<span class="k">${match}</span>`;
+      return `<span class="n">${match}</span>`;
+    });
+}
+
+async function executeJob() {
+  if (!currentJob) return;
+  let payload;
+  try {
+    payload = JSON.parse(document.getElementById('payload-editor').value);
+  } catch {
+    alert('Invalid JSON payload'); return;
+  }
+
+  const btn = document.getElementById('exec-btn');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  document.getElementById('steps-wrap').style.display = 'flex';
+  document.getElementById('result-box').className = 'result-box';
+  document.getElementById('result-label').style.display = 'none';
+
+  setStep(1, 'running');
+  await delay(300);
+  setStep(1, 'done');
+
+  setStep(2, 'running');
+  await delay(400);
+  setStep(2, 'done');
+
+  setStep(3, 'running');
+  await delay(500);
+  setStep(3, 'done');
+
+  setStep(4, 'running');
+  await delay(400);
+  setStep(4, 'done');
+
+  setStep(5, 'running');
+
+  try {
+    const res = await fetch('/demo/run-job', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job: currentJob.name, payload }),
+    });
+    const data = await res.json();
+    setStep(5, 'done');
+    setStep(6, 'running');
+    await delay(200);
+    setStep(6, 'done');
+
+    const resultEl = document.getElementById('result-box');
+    const pretty = JSON.stringify(data.result ?? data, null, 2);
+    resultEl.innerHTML = syntaxHighlight(pretty);
+    resultEl.className = 'result-box visible';
+    document.getElementById('result-label').style.display = 'block';
+    btn.textContent = 'Run Again';
+    btn.disabled = false;
+  } catch (err) {
+    setStep(5, 'waiting');
+    btn.textContent = 'Error — Try Again';
+    btn.disabled = false;
+    console.error(err);
+  }
+}
+</script>
+</body>
+</html>

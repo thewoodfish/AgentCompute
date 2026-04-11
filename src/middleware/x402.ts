@@ -4,6 +4,7 @@ import { verifyPayment } from '../payment/stellar';
 import * as replay from '../payment/replay';
 import { getJobDefinition } from '../jobs/index';
 import { PaymentRequiredResponse, VerifiedPayment } from '../types';
+import { emit } from '../eventBus';
 
 const SERVER_ACCOUNT = process.env.STELLAR_SERVER_PUBLIC_KEY || '';
 
@@ -27,6 +28,8 @@ export async function x402Middleware(req: Request, res: Response, next: NextFunc
     // No payment — issue 402
     const jobId = uuidv4();
     req.jobId = jobId;
+
+    emit({ type: 'job_request', job: jobName, jobId, price: jobDef.price });
 
     const paymentRequired: PaymentRequiredResponse = {
       x402Version: 1,
@@ -87,6 +90,7 @@ export async function x402Middleware(req: Request, res: Response, next: NextFunc
   replay.add(txHash);
 
   console.log(`[x402] VERIFIED tx=${txHash} job=${jobName} amount=${verification.actualAmount} USDC`);
+  emit({ type: 'payment_verified', job: jobName, txHash, amount: verification.actualAmount });
 
   const verifiedPayment: VerifiedPayment = {
     txHash,
