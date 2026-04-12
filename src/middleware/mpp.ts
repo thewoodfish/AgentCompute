@@ -1,4 +1,4 @@
-import { openChannel, debitTick, closeChannel } from '../payment/mpp';
+import { openChannelLegacy as openChannel, debitTick, closeChannelLegacy as closeChannel } from '../payment/mpp';
 
 const TICK_INTERVAL_MS = 1000;
 const TICK_AMOUNT = '0.01'; // 1 USDC-cent per second

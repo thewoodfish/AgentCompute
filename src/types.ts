@@ -51,7 +51,7 @@ export interface PaymentRequiredResponse {
     maxAmountRequired: string;
     asset: string;
     payTo: string;
-    extra: { memo: string };
+    extra: Record<string, string>;
   }>;
 }
 

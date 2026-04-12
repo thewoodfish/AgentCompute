@@ -1,165 +1,226 @@
-# ⬡ AgentCompute
+# AgentCompute
 
-> **Pay-per-job compute for AI agents — no API keys, no accounts, no humans.**
+> **Pay-per-job HTTP compute for AI agents — no API keys, no accounts, no humans.**
 
-An AI agent needs to run a job. It sends an HTTP request. The server says *pay me first*. The agent pays in USDC on Stellar — autonomously, in seconds — and gets the result. That's it. No signups. No billing dashboards. No humans in the loop.
+An AI agent needs compute. It sends an HTTP request. The server responds with **HTTP 402**. The agent pays in USDC on Stellar and retries. The server verifies on-chain and executes the job.
 
-AgentCompute is a fully autonomous compute marketplace built on the [x402 protocol](https://developers.stellar.org/docs/build/agentic-payments/x402) and [Stellar MPP](https://developers.stellar.org/docs/build/agentic-payments/mpp). It demonstrates what the agentic economy looks like when machines pay machines directly over HTTP.
+Zero signups. Zero billing dashboards. Zero human intervention.
+
+Two payment protocols, both fully implemented:
+
+| Protocol | How it works | On-chain txs |
+|---|---|---|
+| **x402 v2** | Soroban SAC `transfer()` per job, verified via Soroban RPC | 1 per job |
+| **MPP channel** | Off-chain ed25519 signed vouchers, backed by a deployed one-way-channel contract | 2 total (open + close) |
 
 ---
 
-## The Problem
+## Demo
 
-Today's AI agents are trapped behind human-managed API keys. Every tool an agent uses — every API call, every compute job — requires a human to pre-authorize it, manage billing, and rotate credentials. This fundamentally limits what agents can do autonomously.
+```
+╔══════════════════════════════════════════╗
+║   AgentCompute Demo Agent                ║
+║   x402 v2 · Soroban SAC · MPP channel   ║
+╚══════════════════════════════════════════╝
 
-The emerging solution is HTTP-native payments: agents carry their own wallets, pay per use, and operate indefinitely without human intervention. But there's no reference implementation showing how this actually works in practice — until now.
+[Agent] Discovering jobs at http://localhost:3000/api...
+[Agent] Found 6 jobs: summarize $0.05 · classify $0.03 · run-code $0.10 ...
+
+[Agent] Generating fresh Stellar keypair...
+[Agent] Public: GDWBUEE7VIGHCPKKSMHDKGVH6CPYCJCC...
+[Agent]   Funded via friendbot, USDC trustline added, 10 USDC received.
+[Agent] Channel keypair: GCOZT5N3I5Z7CEPE... (pre-deployed channel contract)
+
+── x402 Jobs ────────────────────────────────────────────
+[Agent] ── Job: summarize ──
+[Agent]   Submitting Soroban USDC SAC transfer...
+[Agent]   Soroban tx confirmed: 715ef527725a253a...
+[Agent]   ✅ Result in 7023ms: { "summary": "AI is intelligence shown by machines...", "word_count": 19 }
+
+[Agent] ── Job: classify ──
+[Agent]   Soroban tx confirmed: ab7b17b7bf5328d0...
+[Agent]   ✅ Result in 3590ms: { "label": "positive", "confidence": 0.99 }
+
+[Agent] ── Job: run-code ──
+[Agent]   Soroban tx confirmed: 7efc14851761438b...
+[Agent]   ✅ Result in 5672ms: { "stdout": "Fibonacci: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34\nSum: 88" }
+
+── MPP Channel Job ──────────────────────────────────────
+[Agent]   Protocol: off-chain ed25519 vouchers (2 on-chain txs total)
+[Agent]   Paying via MPP channel (off-chain ed25519 voucher)...
+[Agent]   ✅ Channel result in 3242ms (2 ticks, 0.02 USDC streamed):
+           { "stdout": "MPP channel streaming demo — 0.01 USDC/sec\nPrimes up to 50000: 5133\nDone" }
+
+╔══════════════════════════════════════════╗
+║   Final Summary                          ║
+╚══════════════════════════════════════════╝
+  Protocols     : x402 v2 · Soroban SAC + MPP channel
+  Jobs completed: 4
+  Total spent   : $0.20 USDC
+
+  • summarize  [x402       ] $0.05  7023ms  715ef527725a
+  • classify   [x402       ] $0.03  3590ms  ab7b17b7bf53
+  • run-code   [x402       ] $0.10  5672ms  7efc14851761
+  • run-code   [mpp-channel] $0.02  3242ms  2ticks
+```
+
+Every x402 payment is a real **Soroban `invokeHostFunction`** call to the USDC SAC contract, verified on-chain via Soroban RPC. The MPP channel payment is a real **ed25519 commitment** verified against a deployed one-way-channel contract at `CBHE62BTDGY7KGXZWAKIR5XS5TJPYSWHUF7ZNVQF26AFBOIHCDRQLOWN` on Stellar testnet.
 
 ---
 
-## The Solution
+## Why This Matters
+
+Today's AI agents are shackled to human infrastructure. Every API call requires a human to pre-authorize it, manage billing, and rotate credentials. This ceiling is artificial.
+
+**x402 breaks it.** Agents carry their own wallets, pay per call, and operate autonomously and indefinitely. The payment IS the authorization.
+
+**MPP channel mode goes further.** For long-running jobs, the agent deposits into a payment channel once and streams micropayments with each signed commitment — no per-payment on-chain transaction, no latency, no fees per tick.
+
+AgentCompute is a complete, production-pattern reference implementation of both models.
+
+---
+
+## Payment Protocols
+
+### x402 v2 — Soroban SAC (per-job)
 
 ```
-Agent POSTs /run-job  ──→  HTTP 402 + payment instructions
-                                        │
-                                        ▼
-                           Agent pays in USDC on Stellar
-                                        │
-                                        ▼
-                           Server verifies via Horizon API
-                                        │
-                                        ▼
-                           Job executes (LLM / code / data)
-                                        │
-                                        ▼
-                           Result returned in JSON
+1. Agent  POST /run-job
+          { job: "summarize", payload: {...} }
+
+2. Server 402
+          { x402Version: 2,
+            accepts: [{ scheme: "exact",
+                        network: "stellar:testnet",
+                        maxAmountRequired: "0.05",
+                        asset: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+                        payTo: "G..." }] }
+
+3. Agent  builds Soroban invokeHostFunction:
+            USDC_SAC.transfer(agent, server, 500000)
+          simulates → assembles auth entries → signs → submits → txHash
+
+4. Agent  POST /run-job
+          X-Payment: base64({ txHash, type: "soroban" })
+
+5. Server verifies via Soroban RPC:
+            ✓ tx succeeded on-chain
+            ✓ contract = USDC SAC
+            ✓ function = "transfer"
+            ✓ destination = server account
+            ✓ amount ≥ job price
+            ✓ age < 60 seconds
+            ✓ txHash not seen before (replay protection)
+
+6. Server 200 { success: true, result: {...} }
 ```
 
-AgentCompute implements the full **x402 payment protocol on Stellar** — the agent gets a 402, submits a real USDC transaction, and retries with cryptographic proof. No human touched anything.
+No memos. No off-chain state. The transaction itself is the proof.
 
-Long-running jobs use **Stellar MPP (Machine Payments Protocol)** — a payment channel that streams micropayments every second the job runs. Stop paying? Job stops. Simple.
+### MPP Channel — off-chain signed vouchers
+
+```
+[Setup: agent deploys one-way-channel contract with USDC deposit]
+  Contract: CBHE62BTDGY7KGXZWAKIR5XS5TJPYSWHUF7ZNVQF26AFBOIHCDRQLOWN
+  Deposit:  1 USDC (covers 100 seconds at 0.01/sec)
+
+1. Agent  POST /channel/run-job
+
+2. Server 402
+          { channel: "CBHE62BT...",
+            amount: "0.08",
+            cumulativeAmount: "0" }
+
+3. Agent  simulates prepare_commitment on-chain (read-only, no fee)
+          signs ed25519 commitment off-chain
+          { action: "voucher", amount: "800000", signature: "..." }
+
+4. Agent  POST /channel/run-job  (with voucher credential)
+
+5. Server verifies ed25519 signature against channel contract
+          job runs — server ticks 0.01 USDC/sec
+          job completes → server closes channel on-chain
+
+6. Server 200 { success: true, result: {...}, mpp_ticks: 3, mpp_total_paid: "0.03" }
+```
+
+Per-payment cost: ~0 (just ed25519 verify, no on-chain tx). Two on-chain transactions total for any number of payments.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         AI Agent (client/agent.ts)                   │
-│  discover jobs → fund self → pay per job → receive results           │
-└───────────────────────────┬─────────────────────────────────────────┘
-                            │  HTTP POST /run-job
-                            ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    AgentCompute Server (Express)                      │
-│                                                                       │
-│   GET  /          →  Dashboard UI (real-time payment flow viz)        │
-│   GET  /api       →  Service discovery (jobs, prices, payment info)   │
-│   GET  /events    →  SSE stream (live payment + job events)           │
-│   POST /run-job   →  x402-gated job execution                         │
-│   POST /demo/run-job  →  Demo endpoint (UI Try It panel)              │
-└───────────┬───────────────────────┬─────────────────────────────────┘
-            │                       │
-            ▼                       ▼
-┌───────────────────┐   ┌──────────────────────────────────────────┐
-│   x402 Middleware  │   │        MPP Middleware (long jobs)         │
-│                   │   │                                          │
-│  No header?       │   │  Open channel → debit 1¢/sec             │
-│  → 402 + memo ID  │   │  Payment stops? → kill + partial result  │
-│                   │   │  Job done? → close + settle on-chain     │
-│  Has header?      │   └──────────────────────────────────────────┘
-│  → decode proof   │
-│  → Horizon verify │               ┌──────────────────────────────┐
-│  → replay check   │               │   Job Runners                 │
-│  → next()         │               │                              │
-└───────────────────┘               │  summarize   → Groq LLM      │
-                                    │  classify    → Groq LLM      │
-┌───────────────────┐               │  analyze     → Groq LLM      │
-│  Stellar Layer     │               │  run-code    → vm / python   │
-│                   │               │  csv-insights→ papaparse+LLM │
-│  stellar.ts       │               │  pdf-to-text → pdf-parse     │
-│  → Horizon verify │               └──────────────────────────────┘
-│                   │
-│  mpp.ts           │
-│  → channel mgmt   │
-│  → mock → Soroban │
-│                   │
-│  replay.ts        │
-│  → tx hash cache  │
-└───────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                   AI Agent  (client/agent.ts)                    │
+│                                                                  │
+│  discover → fresh keypair → friendbot → USDC → run jobs          │
+│                                                                  │
+│  x402 flow:   POST /run-job → 402 → Soroban SAC transfer         │
+│               → retry with X-Payment: txHash → result            │
+│                                                                  │
+│  channel flow: POST /channel/run-job → 402 with channel addr     │
+│                → sign ed25519 voucher → retry → result           │
+└─────────────────────────────┬────────────────────────────────────┘
+                              │ HTTP
+                              ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                  AgentCompute Server (Express)                   │
+│                                                                  │
+│  GET  /              → Real-time dashboard (SSE + canvas UI)     │
+│  GET  /api           → Service discovery (jobs, prices, dest)    │
+│  GET  /events        → SSE stream of all payment + job events    │
+│  POST /run-job       → x402-gated: Soroban SAC verification      │
+│  POST /mpp/run-job   → MPP charge mode (server-sponsored fees)   │
+│  POST /channel/run-job → MPP channel mode (off-chain vouchers)   │
+└──────────┬────────────────────────────┬────────────────────────--┘
+           │                            │
+           ▼                            ▼
+┌──────────────────────┐   ┌────────────────────────────────────┐
+│   Payment Layer       │   │   Job Runners                      │
+│                      │   │                                    │
+│  soroban.ts          │   │  summarize    → Groq LLM           │
+│  → Soroban RPC       │   │  classify     → Groq LLM           │
+│  → parse XDR         │   │  analyze      → Groq LLM           │
+│  → verify SAC args   │   │  run-code     → vm / python        │
+│                      │   │  csv-insights → papaparse + LLM    │
+│  mpp.ts              │   │  pdf-to-text  → pdf-parse          │
+│  → charge: Mppx      │   └────────────────────────────────────┘
+│    (@stellar/mpp)    │
+│  → channel: Mppx     │   ┌────────────────────────────────────┐
+│    (ed25519 verify)  │   │   Stellar Layer (testnet)          │
+│                      │   │                                    │
+│  replay.ts           │   │  USDC SAC contract                 │
+│  → txHash cache      │   │  CBIELTK6YBZJU5UP2WWQEUCYKLPU...   │
+│    10-min TTL        │   │                                    │
+└──────────────────────┘   │  Channel contract                  │
+                           │  CBHE62BTDGY7KGXZWAKIR5XS5TJ...   │
+                           └────────────────────────────────────┘
 ```
 
 ---
 
 ## Live Dashboard
 
-AgentCompute ships with a real-time dashboard at `http://localhost:3000`:
+Open `http://localhost:3000`:
 
-- **Animated x402 flow diagram** — nodes light up live as each payment stage completes
-- **SSE-powered activity terminal** — color-coded feed of every 402, payment, and job event
-- **Live stats** — jobs run, USDC earned, avg response time — auto-updating
-- **Interactive Try It panel** — pick any job, edit the JSON payload, watch the full flow animate, get real LLM results
+- **Animated flow diagram** — 6 nodes light up as each payment stage fires
+- **Live activity terminal** — SSE stream of every 402, payment, and job event
+- **Stats counters** — jobs completed, USDC earned, average response time
+- **Try It panel** — pick any job, edit the payload, get real LLM results
 
 ---
 
 ## Job Catalog
 
-| Job | Price | Est. Time | Description |
-|---|---|---|---|
-| `summarize` | **$0.05 USDC** | ~3s | LLM text summarization |
-| `classify` | **$0.03 USDC** | ~2s | LLM text classification with confidence score |
-| `analyze` | **$0.08 USDC** | ~4s | LLM analysis + question answering |
-| `run-code` | **$0.10 USDC** | ~8s ⚡ | Sandboxed JS or Python execution |
-| `csv-insights` | **$0.07 USDC** | ~6s ⚡ | CSV data analysis with LLM insights |
-| `pdf-to-text` | **$0.04 USDC** | ~3s | PDF → plain text extraction |
-
-⚡ = MPP streaming payments (Stellar payment channel, debited per second)
-
----
-
-## Payment Protocol
-
-### x402 on Stellar
-
-Standard HTTP 402 extended for Stellar USDC. The full flow in one request cycle:
-
-```
-→  POST /run-job   { job: "summarize", payload: { text: "..." } }
-←  402             { x402Version: 1, accepts: [{ scheme: "exact",
-                     network: "stellar-testnet", maxAmountRequired: "0.05",
-                     asset: "USDC", payTo: "G...", extra: { memo: "<job_id>" } }] }
-
-   [Agent submits Stellar USDC transaction with memo = job_id]
-
-→  POST /run-job   { job: "summarize", payload: { text: "..." } }
-   X-Payment: eyJ0eEhhc2giOiAiYWJjMTIzLi4uIn0=   ← base64(JSON proof)
-←  200             { success: true, result: { summary: "...", word_count: 42 },
-                     duration_ms: 2847, payment_verified: true, tx_hash: "abc123..." }
-```
-
-Server-side verification (all on Horizon testnet):
-- ✓ Transaction succeeded on-chain
-- ✓ Destination matches server account
-- ✓ Asset is USDC (correct testnet issuer)
-- ✓ Amount ≥ job price
-- ✓ Memo matches job ID
-- ✓ Transaction < 60 seconds old
-- ✓ TX hash not previously seen (replay protection)
-
-### Stellar MPP (Machine Payments Protocol)
-
-Jobs estimated ≥ 5 seconds open a payment channel at job start:
-
-```
-Job starts   → openChannel(jobId, client, maxBalance=1.0 USDC)
-Every second → debitTick(channelId, "0.01")   [1 USDC-cent/sec]
-Job ends     → closeChannel(channelId)         [final on-chain settlement]
-
-If balance exhausted or client stops:
-             → job killed immediately
-             → returns { success: false, reason: "payment_stopped", partial_result }
-```
-
-MPP is currently mock-implemented (logs `[MPP-MOCK]`) with identical function signatures to the real Soroban implementation — one env var + one file swap to go live.
+| Job | Price | Description |
+|---|---|---|
+| `summarize` | **$0.05** | LLM text summarization (Groq Llama 3.3 70B) |
+| `classify` | **$0.03** | Text classification with confidence score |
+| `analyze` | **$0.08** | LLM analysis and question answering |
+| `run-code` | **$0.10** | Sandboxed JS (`vm`) or Python (`child_process`) |
+| `csv-insights` | **$0.07** | CSV analysis with LLM narrative insights |
+| `pdf-to-text` | **$0.04** | PDF → plain text extraction |
 
 ---
 
@@ -173,151 +234,98 @@ cd AgentCompute
 npm install
 ```
 
-### 2. Configure environment
-
-```bash
-cp .env.example .env
-```
-
-### 3. Generate server keypair & get a free Groq API key
+### 2. Generate server keypair
 
 ```bash
 npm run keygen
-# → copy STELLAR_SERVER_PUBLIC_KEY and STELLAR_SERVER_SECRET_KEY into .env
+# Copy STELLAR_SERVER_PUBLIC_KEY and STELLAR_SERVER_SECRET_KEY into .env
 ```
 
-Get a free API key at **[console.groq.com](https://console.groq.com)** — no credit card needed.
+### 3. Get a free Groq API key
 
-### 4. Fund server account
+Sign up at **[console.groq.com](https://console.groq.com)** — no credit card. Add to `.env`:
+
+```env
+GROQ_API_KEY=gsk_...
+```
+
+### 4. Fund the server account
 
 ```bash
-# Paste your public key:
 curl "https://friendbot.stellar.org/?addr=YOUR_PUBLIC_KEY"
 ```
 
-### 5. Add USDC trustline to server
-
-```bash
-npx ts-node -e "
-import 'dotenv/config';
-import * as S from '@stellar/stellar-sdk';
-const kp = S.Keypair.fromSecret(process.env.STELLAR_SERVER_SECRET_KEY);
-const srv = new S.Horizon.Server('https://horizon-testnet.stellar.org');
-const USDC = new S.Asset('USDC','GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5');
-srv.loadAccount(kp.publicKey()).then(a => {
-  const tx = new S.TransactionBuilder(a,{fee:S.BASE_FEE,networkPassphrase:S.Networks.TESTNET})
-    .addOperation(S.Operation.changeTrust({asset:USDC,limit:'10000'}))
-    .setTimeout(30).build();
-  tx.sign(kp); return srv.submitTransaction(tx);
-}).then(()=>console.log('Done!')).catch(console.error);
-"
-```
-
-### 6. Set up USDC distributor for agent demo (one command)
+### 5. Set up USDC distributor for the agent demo
 
 ```bash
 npm run setup-usdc
-# → generates funded account with ~200 USDC, prints TESTNET_USDC_DISTRIBUTOR_SECRET
-# → paste that value into .env
+# Generates a funded testnet account with USDC
+# Paste TESTNET_USDC_DISTRIBUTOR_SECRET into .env
 ```
+
+### 6. Deploy the MPP channel contract (optional — enables channel mode)
+
+```bash
+# Install stellar-cli
+brew install stellar-cli
+
+# Build the one-way-channel contract
+git clone https://github.com/stellar-experimental/one-way-channel /tmp/one-way-channel
+cd /tmp/one-way-channel/contracts/channel && stellar contract build
+
+# Generate a channel demo keypair
+npm run keygen
+# → use this as CHANNEL_DEMO_SECRET / CHANNEL_DEMO_PUBLIC
+
+# Fund the channel account via friendbot, add USDC trustline, get test USDC
+# Then deploy the channel contract:
+stellar contract deploy \
+  --wasm-hash <from build output> \
+  --source CHANNEL_DEMO_SECRET \
+  --network testnet \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  -- \
+  --token CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA \
+  --from CHANNEL_DEMO_PUBLIC \
+  --commitment-key <32-byte raw pubkey hex> \
+  --to SERVER_PUBLIC_KEY \
+  --amount 10000000 \
+  --refund-waiting-period 17280
+
+# Add to .env:
+# MPP_ENABLED=true
+# CHANNEL_CONTRACT=C...  (from deploy output)
+# CHANNEL_DEMO_SECRET=S...
+# CHANNEL_DEMO_PUBLIC=G...
+```
+
+> A pre-deployed channel contract is already configured in `.env.example` for the demo.
 
 ### 7. Start the server
 
 ```bash
 npm run dev
-# → http://localhost:3000
+# Server running on http://localhost:3000
+# [MPP] Channel mode enabled: CBHE62BT...
 ```
 
-### 8. Run the autonomous agent demo
+### 8. Run the autonomous agent
 
 ```bash
 npm run agent
 ```
 
-Watch the agent generate a fresh wallet, fund itself, and pay for 3 real jobs — end-to-end, zero human input.
-
 ---
 
-## Agent Demo Output
+## Scripts
 
-```
-╔══════════════════════════════════════╗
-║   AgentCompute Demo Agent            ║
-╚══════════════════════════════════════╝
-
-[Agent] Discovering jobs at http://localhost:3000/api...
-[Agent] Found 6 jobs:
-  • summarize      $0.05 USDC — LLM-powered text summarization
-  • classify       $0.03 USDC — LLM-powered text classification
-  • run-code       $0.10 USDC — Sandboxed code execution
-
-[Agent] Generating fresh Stellar keypair...
-[Agent] Public key: GDLX4KVL...
-[Agent] Account funded. USDC trustline added. 10 USDC received.
-
-[Agent] ── Job: summarize ──
-[Agent]   Payment required: 0.05 USDC
-[Agent]   Submitting Stellar payment... tx=28b27e19...
-[Agent]   ✅ Result in 8.9s → { summary: "AI refers to machine intelligence...", word_count: 19 }
-
-[Agent] ── Job: classify ──
-[Agent]   ✅ Result in 9.8s → { label: "positive", confidence: 0.99 }
-
-[Agent] ── Job: run-code ──
-[Agent]   ✅ Result in 9.5s → { stdout: "Fibonacci: 0, 1, 1, 2, 3, 5, 8, 13..." }
-
-  Jobs completed : 3
-  Total spent    : $0.18 USDC
-  Total time     : 28s
-```
-
----
-
-## Example API Calls
-
-### Step 1 — Get 402 payment challenge
-
-```bash
-curl -X POST http://localhost:3000/run-job \
-  -H "Content-Type: application/json" \
-  -d '{"job":"summarize","payload":{"text":"Your text here..."}}'
-```
-
-```json
-{
-  "x402Version": 1,
-  "accepts": [{
-    "scheme": "exact",
-    "network": "stellar-testnet",
-    "maxAmountRequired": "0.05",
-    "asset": "USDC",
-    "payTo": "GCTIQ2ZV...",
-    "extra": { "memo": "d8e75a1d58194256" }
-  }]
-}
-```
-
-### Step 2 — Submit payment proof
-
-```bash
-PROOF=$(echo '{"txHash":"28b27e19...","amount":"0.05","asset":"USDC","network":"stellar-testnet","memo":"d8e75a1d58194256"}' | base64)
-
-curl -X POST http://localhost:3000/run-job \
-  -H "Content-Type: application/json" \
-  -H "X-Payment: $PROOF" \
-  -d '{"job":"summarize","payload":{"text":"Your text here..."}}'
-```
-
-```json
-{
-  "success": true,
-  "job": "summarize",
-  "result": { "summary": "...", "word_count": 19 },
-  "duration_ms": 2847,
-  "payment_verified": true,
-  "tx_hash": "28b27e19..."
-}
-```
+| Command | Description |
+|---|---|
+| `npm run dev` | Start server on `:3000` |
+| `npm run agent` | Run the autonomous demo agent (x402 + MPP channel) |
+| `npm run keygen` | Generate a fresh Stellar keypair |
+| `npm run setup-usdc` | Create and fund a USDC distributor account |
 
 ---
 
@@ -325,26 +333,18 @@ curl -X POST http://localhost:3000/run-job \
 
 | Layer | Technology |
 |---|---|
-| Runtime | Node.js + TypeScript (strict mode) |
+| Runtime | Node.js 24 + TypeScript (strict) |
 | Server | Express |
 | LLM | Groq API — `llama-3.3-70b-versatile` (free tier) |
-| Payments | `@stellar/stellar-sdk` — x402 + MPP |
-| Payment verification | Stellar Horizon testnet |
-| Code sandbox | Node.js `vm` module + `child_process` (Python) |
+| x402 payment | Soroban SAC `transfer()` — `@stellar/stellar-sdk` v15 |
+| x402 verification | Soroban RPC — parses raw `envelopeXdr`, walks `invokeHostFunction` |
+| MPP charge | `@stellar/mpp/charge/server` — server-sponsored fees |
+| MPP channel | `@stellar/mpp/channel/server` — off-chain ed25519 vouchers |
+| Channel contract | `one-way-channel` Soroban WASM deployed to testnet |
+| Code sandbox | Node.js `vm` (JS) + `child_process` (Python) |
 | CSV parsing | `papaparse` |
 | PDF extraction | `pdf-parse` |
 | Real-time UI | Vanilla JS + SSE (no build step) |
-
----
-
-## Switching MPP Mock → Real Soroban
-
-The MPP implementation in `src/payment/mpp.ts` is a clean mock with identical function signatures to the real Soroban SAC implementation. To go live:
-
-1. Set `MPP_ENABLED=true` in `.env`
-2. Replace `src/payment/mpp.ts` with the Soroban SAC version
-
-That's it. One env var, one file. Every function signature stays the same.
 
 ---
 
@@ -353,41 +353,44 @@ That's it. One env var, one file. Every function signature stays the same.
 ```
 agentcompute/
 ├── src/
-│   ├── server.ts              # Express server, routes, SSE, demo endpoint
+│   ├── server.ts              # Express server, all routes, SSE
 │   ├── types.ts               # Shared TypeScript interfaces
-│   ├── eventBus.ts            # Real-time event bus (SSE → dashboard)
+│   ├── eventBus.ts            # SSE event bus → real-time dashboard
 │   ├── middleware/
-│   │   ├── x402.ts            # Payment gate: 402 challenge + verification
-│   │   └── mpp.ts             # Streaming payment runner for long jobs
+│   │   ├── x402.ts            # x402: 402 challenge + Soroban RPC verification
+│   │   └── mpp.ts             # MPP streaming tick runner
 │   ├── jobs/
 │   │   ├── index.ts           # Job registry + dispatcher
-│   │   ├── llm.ts             # LLM jobs via Groq (summarize/classify/analyze)
+│   │   ├── llm.ts             # Groq: summarize / classify / analyze
 │   │   ├── code.ts            # Sandboxed JS (vm) + Python (child_process)
-│   │   ├── data.ts            # CSV analysis (papaparse + LLM)
-│   │   └── file.ts            # PDF extraction (pdf-parse)
+│   │   ├── data.ts            # CSV analysis (papaparse + Groq)
+│   │   └── file.ts            # PDF text extraction (pdf-parse)
 │   └── payment/
-│       ├── stellar.ts         # Horizon verification
-│       ├── mpp.ts             # MPP channel management (mock-first)
-│       └── replay.ts          # Replay attack protection (10-min TTL cache)
+│       ├── soroban.ts         # Soroban RPC verifier (SAC invokeHostFunction)
+│       ├── mpp.ts             # @stellar/mpp charge + channel + Express adapters
+│       └── replay.ts          # TX hash replay protection (10-min TTL)
 ├── client/
-│   └── agent.ts               # Autonomous agent demo
+│   └── agent.ts               # Autonomous agent: x402 + MPP channel
 ├── scripts/
-│   └── setup-usdc-distributor.ts  # One-command USDC distributor setup
+│   └── setup-usdc-distributor.ts
 └── public/
-    └── index.html             # Real-time dashboard (no build step)
+    └── index.html             # Real-time dashboard (canvas + SSE)
 ```
 
 ---
 
-## Scripts
+## Key Design Decisions
 
-```bash
-npm run dev          # Start server on :3000
-npm run agent        # Run autonomous demo agent
-npm run keygen       # Generate a fresh Stellar keypair
-npm run setup-usdc   # Set up a funded USDC distributor account
-```
+**No memos in Soroban transactions.** Stellar's Soroban runtime forbids memos on `invokeHostFunction` operations. AgentCompute uses the transaction hash as the sole job correlator and replay key — simpler and more correct than any memo scheme.
+
+**Soroban RPC over Horizon.** Payment verification parses the raw `envelopeXdr` from `getTransaction()`, walks the `invokeHostFunction` op, and checks SAC `transfer()` args directly. Cryptographically authoritative — no off-chain indexer.
+
+**Server-sponsored fees.** The server's keypair signs the envelope for both charge and channel mode. Clients only sign Soroban auth entries (x402) or ed25519 commitments (channel). No XLM required on the agent side beyond account activation.
+
+**Real one-way-channel contract.** The MPP channel is not simulated. The contract (`CBHE62BTDGY7KGXZWAKIR5XS5TJPYSWHUF7ZNVQF26AFBOIHCDRQLOWN`) is deployed on Stellar testnet from the [`stellar-experimental/one-way-channel`](https://github.com/stellar-experimental/one-way-channel) source. Ed25519 commitments are verified against the on-chain contract state.
+
+**Replay protection without memos.** In-memory set of spent TX hashes (10-min TTL, matching Stellar's max transaction age) prevents double-spend without any off-chain nonce scheme.
 
 ---
 
-*Built with [x402](https://developers.stellar.org/docs/build/agentic-payments/x402) + [Stellar MPP](https://developers.stellar.org/docs/build/agentic-payments/mpp) on Stellar testnet.*
+*Built on [x402](https://developers.stellar.org/docs/build/agentic-payments/x402) · [Stellar MPP](https://developers.stellar.org/docs/build/agentic-payments/mpp) · Stellar testnet*
