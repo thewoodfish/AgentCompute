@@ -10,7 +10,9 @@ import { eventBus, EVENT_CHANNEL, emit, AppEvent } from './eventBus';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// Works for both: tsx (src/) and compiled (dist/src/) — public/ is one level up in both
+const publicDir = path.join(__dirname, '..', 'public');
+app.use(express.static(publicDir));
 
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const SERVER_ACCOUNT = process.env.STELLAR_SERVER_PUBLIC_KEY || '';
