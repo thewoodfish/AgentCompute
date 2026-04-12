@@ -5,7 +5,7 @@
   "main": "dist/src/server.js",
   "scripts": {
     "dev": "tsx src/server.ts",
-    "build": "esbuild src/server.ts --bundle --platform=node --target=node22 --outfile=dist/server.js --external:pdf-parse && cp -r public dist/",
+    "build": "esbuild src/server.ts --bundle --platform=node --target=node22 --outfile=dist/server.js && cp -r public dist/",
     "start": "node dist/server.js",
     "agent": "tsx client/agent.ts",
     "keygen": "tsx -e \"import { Keypair } from '@stellar/stellar-sdk'; const kp = Keypair.random(); console.log('Public key:', kp.publicKey()); console.log('Secret key:', kp.secret());\"",

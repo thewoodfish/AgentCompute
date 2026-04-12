@@ -306,20 +306,25 @@ app.post('/run-job', x402Middleware, async (req: Request, res: Response) => {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
-const server = app.listen(PORT, () => {
-  console.log(`[AgentCompute] Server running on http://localhost:${PORT}`);
-  console.log(`[AgentCompute] Stellar account: ${SERVER_ACCOUNT || '(not configured)'}`);
-  console.log(`[AgentCompute] Network: stellar-testnet`);
-  if (channelEnabled) {
-    console.log(`[AgentCompute] MPP channel: ${CHANNEL_CONTRACT}`);
+// Export for Vercel serverless — Vercel imports this module and calls it as a handler
+export default app;
+
+if (!process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    console.log(`[AgentCompute] Server running on http://localhost:${PORT}`);
+    console.log(`[AgentCompute] Stellar account: ${SERVER_ACCOUNT || '(not configured)'}`);
+    console.log(`[AgentCompute] Network: stellar-testnet`);
+    if (channelEnabled) {
+      console.log(`[AgentCompute] MPP channel: ${CHANNEL_CONTRACT}`);
+    }
+  });
+
+  async function shutdown() {
+    console.log('\n[AgentCompute] Shutting down gracefully...');
+    await closeAllChannels();
+    server.close(() => { console.log('[AgentCompute] Server closed.'); process.exit(0); });
   }
-});
 
-async function shutdown() {
-  console.log('\n[AgentCompute] Shutting down gracefully...');
-  await closeAllChannels();
-  server.close(() => { console.log('[AgentCompute] Server closed.'); process.exit(0); });
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
-
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);

@@ -63,3 +63,5 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+.vercel
+# api/ is intentionally tracked (static Vercel entry)
