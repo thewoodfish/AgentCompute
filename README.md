@@ -7,8 +7,8 @@ An AI agent needs compute. It sends an HTTP request. The server responds with **
 Zero signups. Zero billing dashboards. Zero human intervention.
 
 **Live deployments:**
-- Railway (primary): `https://clever-light-production.up.railway.app`
-- Vercel (serverless): `https://agentcompute-rosy.vercel.app`
+- Railway (primary): [https://clever-light-production.up.railway.app](https://clever-light-production.up.railway.app)
+- Vercel (serverless): [https://agentcompute-rosy.vercel.app](https://agentcompute-rosy.vercel.app)
 
 Two payment protocols, both fully implemented:
 
@@ -206,7 +206,7 @@ Per-payment cost: ~0 (just ed25519 verify, no on-chain tx). Two on-chain transac
 
 ## Live Dashboard
 
-Open `http://localhost:3000` (or the [live Railway deployment](https://clever-light-production.up.railway.app)):
+Open [http://localhost:3000](http://localhost:3000) (or the [live Railway deployment](https://clever-light-production.up.railway.app)):
 
 - **Animated flow diagram** — 6 nodes light up as each payment stage fires
 - **Live activity terminal** — SSE stream of every 402, payment, and job event
